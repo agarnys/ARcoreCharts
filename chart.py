@@ -5,7 +5,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from enum import Enum
 
-
+# X - lewo(wartości ujemne), prawo(wartości dodatnie)
+# Y - dół(wartości ujemne), góra(wartości dodatnie)
+# Z - do przodu(wartości ujemne), do tyłu(wartości dodatnie)
 class Axis(Enum):
     X = 0
     Y = 1
@@ -75,18 +77,45 @@ axis_z_min, axis_z_max = get_dynamic_range(combined_z)
 
 # ====== WYKRES 3D Plotly ======
 # Z is switched with Y to better clarity
+
+# allValues_texts = [f"Punkt {i}" for i in range(len(allValues))]
+# checkpoints_texts = [f"Checkpoint {i}" for i in range(len(checkpointsData))]
+
+allValues_texts = [
+    f"X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
+    for i, (x, y, z) in enumerate(zip(
+        allValues[Axis.X.value],
+        allValues[Axis.Y.value],
+        allValues[Axis.Z.value]
+    ))
+]
+
+checkpoints_texts = [
+    f"Checkpoint {i}<br>X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
+    for i, (x, y, z) in enumerate(zip(
+        checkpointsData[Axis.X.value],
+        checkpointsData[Axis.Y.value],
+        checkpointsData[Axis.Z.value]
+    ))
+]
+
+
 trace = go.Scatter3d(
     x=allValues[Axis.X.value], y=allValues[Axis.Z.value], z=allValues[Axis.Y.value],
     mode='markers',
     marker=dict(size=5, color='blue', opacity=0.8),
-    name='Values'
+    name='Values',
+    text=allValues_texts,
+    hoverinfo='text'
 )
 
 checkpoints = go.Scatter3d(
     x=checkpointsData[Axis.X.value], y=checkpointsData[Axis.Z.value], z=checkpointsData[Axis.Y.value],
     mode='markers',
     marker=dict(size=5, color='red', opacity=0.8),
-    name='Checkpoints'
+    name='Checkpoints',
+    text=checkpoints_texts,
+    hoverinfo='text'
 )
 
 layout = go.Layout(
@@ -94,7 +123,7 @@ layout = go.Layout(
     scene=dict(
         xaxis_title='X(prawo lewo)',
         yaxis_title='Z(przód tył)',
-        zaxis_title='Y(góra dół)',
+        zaxis_title='Y(dół góra)',
         xaxis=dict(range=[axis_x_min, axis_x_max]),
         yaxis=dict(range=[axis_z_min, axis_z_max]),
         zaxis=dict(range=[axis_y_min, axis_y_max]),
@@ -108,26 +137,38 @@ fig.show()
 # XY
 plt.scatter(allValues[Axis.X.value], allValues[Axis.Y.value])
 plt.scatter(checkpointsData[Axis.X.value], checkpointsData[Axis.Y.value])
-plt.xlabel("X")
-plt.ylabel("Y")
+plt.xlabel("X(prawo lewo)")
+plt.ylabel("Y(dół góra)")
 plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_y_min, axis_y_max])
+
+for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Y.value])):
+    plt.text(x, y, f"{i}", fontsize=6, color='black')
+
 plt.show()
 
 # XZ
 plt.scatter(allValues[Axis.X.value], allValues[Axis.Z.value])
 plt.scatter(checkpointsData[Axis.X.value], checkpointsData[Axis.Z.value])
-plt.xlabel("X")
-plt.ylabel("Z")
+plt.xlabel("X(prawo lewo)")
+plt.ylabel("Z(przód tył)")
 plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_z_min, axis_z_max])
+
+for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Z.value])):
+    plt.text(x, y, f"{i}", fontsize=6, color='black')
+
 plt.show()
 
 # ZY
 plt.scatter(allValues[Axis.Z.value], allValues[Axis.Y.value])
 plt.scatter(checkpointsData[Axis.Z.value], checkpointsData[Axis.Y.value])
-plt.xlabel("Z")
-plt.ylabel("Y")
+plt.xlabel("Z(przód tył)")
+plt.ylabel("Y(dół góra)")
 plt.xlim([axis_z_min, axis_z_max])
 plt.ylim([axis_y_min, axis_y_max])
+
+for i, (x, y) in enumerate(zip(checkpointsData[Axis.Z.value], checkpointsData[Axis.Y.value])):
+    plt.text(x, y, f"{i}", fontsize=6, color='black')
+
 plt.show()
