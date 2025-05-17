@@ -2,6 +2,7 @@ import os
 import re
 import plotly.graph_objs as go
 import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 from enum import Enum
 
@@ -13,56 +14,57 @@ class Axis(Enum):
     Y = 1
     Z = 2
 
-# ====== USTAWIENIE ZAKRESÓW DYNAMICZNIE (z marginesem procentowym) ======
-# Możesz zmieniać ten procent np. 10% (0.1), 20% (0.2), itd.
-margin_ratio = 0.1  # 10% marginesu
+margin_ratio = 0.1
 
 def get_dynamic_range(data):
-    """Zwraca min i max z dodanym marginesem procentowym."""
     data_min = data.min()
     data_max = data.max()
     range_span = data_max - data_min
     margin = range_span * margin_ratio
     return data_min - margin, data_max + margin
 
-# ====== USTAWIENIA ŚCIEŻEK ======
+# === ŚCIEŻKI ===
 base_folder = "files"
 data_prefix = "dane"
 checkpoints_prefix = "checkpoint"
 data_suffix = ".csv"
 
-# ====== SZUKANIE FOLDERÓW dataset-YYYY-MM-DD_HH-MM-SS ======
-available_folders = sorted(
-    [f for f in os.listdir(base_folder) if os.path.isdir(os.path.join(base_folder, f)) and f.startswith("dataset-")]
-)
+# === WZORZEC: dowolna nazwa kończąca się na datę ===
+folder_pattern = re.compile(r'^(.*)(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})$')
 
-if not available_folders:
-    print("Brak folderów z danymi w katalogu 'files/'.")
+# === ZNAJDŹ PASUJĄCE FOLDERY ===
+available_datasets = []
+
+for folder in sorted(os.listdir(base_folder)):
+    full_path = os.path.join(base_folder, folder)
+    if not os.path.isdir(full_path):
+        continue
+
+    match = folder_pattern.match(folder)
+    if not match:
+        continue
+
+    timestamp = match.group(2)
+    file1 = os.path.join(full_path, f"{data_prefix}-{timestamp}{data_suffix}")
+    file2 = os.path.join(full_path, f"{checkpoints_prefix}-{timestamp}{data_suffix}")
+
+    if os.path.isfile(file1) and os.path.isfile(file2):
+        available_datasets.append((folder, timestamp, file1, file2))
+
+if not available_datasets:
+    print("Brak folderów zawierających poprawne dane.")
     exit(1)
 
-print("Dostępne foldery z danymi:")
-for idx, folder in enumerate(available_folders):
-    print(f"{idx}: {folder}")
+# === WYBÓR ===
+print("Znalezione foldery z poprawnymi danymi:")
+for idx, (folder, timestamp, _, _) in enumerate(available_datasets):
+    print(f"{idx}: {folder[:-20]} | data: {timestamp}")
 
-selected_idx = int(input("Wybierz numer folderu z listy: "))
-selected_folder = available_folders[selected_idx]
+selected_idx = int(input("Wybierz numer folderu: "))
+selected_folder, timestamp, fileName1, fileName2 = available_datasets[selected_idx]
 
-# ====== WYODRĘBNIENIE ZNACZNIKA CZASU Z NAZWY ======
-match = re.match(r"dataset-(.+)", selected_folder)
-if not match:
-    print("Niepoprawna nazwa folderu.")
-    exit(1)
-
-timestamp = match.group(1)
-
-# ====== KONSTRUKCJA ŚCIEŻEK DO PLIKÓW ======
-folder_path = os.path.join(base_folder, selected_folder)
-fileName1 = os.path.join(folder_path, f"{data_prefix}-{timestamp}{data_suffix}")
-fileName2 = os.path.join(folder_path, f"{checkpoints_prefix}-{timestamp}{data_suffix}")
-
-print(f"\nŁadowanie plików:\n - {fileName1}\n - {fileName2}")
-
-# ====== WCZYTYWANIE DANYCH ======
+# === ODCZYT DANYCH ===
+print(f"\nWczytywanie danych z:\n- {fileName1}\n- {fileName2}")
 allValues = pd.read_csv(fileName1, header=None)
 checkpointsData = pd.read_csv(fileName2, header=None)
 
@@ -91,7 +93,7 @@ allValues_texts = [
 ]
 
 checkpoints_texts = [
-    f"Checkpoint {i}<br>X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
+    f"Checkpoint {i+1}<br>X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
     for i, (x, y, z) in enumerate(zip(
         checkpointsData[Axis.X.value],
         checkpointsData[Axis.Y.value],
@@ -103,7 +105,7 @@ checkpoints_texts = [
 trace = go.Scatter3d(
     x=allValues[Axis.X.value], y=allValues[Axis.Z.value], z=allValues[Axis.Y.value],
     mode='markers',
-    marker=dict(size=5, color='blue', opacity=0.8),
+    marker=dict(size=4, color='blue', opacity=0.8),
     name='Values',
     text=allValues_texts,
     hoverinfo='text'
@@ -143,7 +145,7 @@ plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_y_min, axis_y_max])
 
 for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Y.value])):
-    plt.text(x, y, f"{i}", fontsize=6, color='black')
+    plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
 plt.show()
 
@@ -156,7 +158,7 @@ plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_z_min, axis_z_max])
 
 for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Z.value])):
-    plt.text(x, y, f"{i}", fontsize=6, color='black')
+    plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
 plt.show()
 
@@ -169,6 +171,80 @@ plt.xlim([axis_z_min, axis_z_max])
 plt.ylim([axis_y_min, axis_y_max])
 
 for i, (x, y) in enumerate(zip(checkpointsData[Axis.Z.value], checkpointsData[Axis.Y.value])):
-    plt.text(x, y, f"{i}", fontsize=6, color='black')
+    plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
+# ====== RÓŻNICE X, Y, Z (delta między kolejnymi punktami) ======
+
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Zakładam, że masz dane allValues[Axis.X.value], itp.
+# Próg dla odstających punktów
+threshold = 0.5
+
+# Oblicz różnice
+delta_x = np.diff(allValues[Axis.X.value])
+delta_y = np.diff(allValues[Axis.Y.value])
+delta_z = np.diff(allValues[Axis.Z.value])
+
+# Indeksy dla wykresów
+indexes = np.arange(len(delta_x))
+
+# ====== WYKRES ΔX ======
+plt.figure(figsize=(16, 6))
+plt.plot(indexes, delta_x, linestyle='-', linewidth=1.5, label="ΔX")
+plt.axhline(0, color='gray', linestyle='--')
+
+# Adnotacje dla punktów odstających
+for i, val in enumerate(delta_x):
+    if abs(val) > threshold:
+        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+
+plt.title("Różnice między kolejnymi punktami (ΔX)")
+plt.xlabel("Indeks")
+plt.ylabel("ΔX")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.margins(x=0.05, y=0.1)
 plt.show()
+
+# ====== WYKRES ΔY ======
+plt.figure(figsize=(16, 6))
+plt.plot(indexes, delta_y, color='green', label="ΔY")
+plt.axhline(0, color='gray', linestyle='--')
+
+# Adnotacje dla punktów odstających
+for i, val in enumerate(delta_y):
+    if abs(val) > threshold:
+        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+
+plt.title("Różnice między kolejnymi punktami (ΔY)")
+plt.xlabel("Indeks")
+plt.ylabel("ΔY")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+# ====== WYKRES ΔZ ======
+plt.figure(figsize=(16, 6))
+plt.plot(indexes, delta_z, color='orange', label="ΔZ")
+plt.axhline(0, color='gray', linestyle='--')
+
+# Adnotacje dla punktów odstających
+for i, val in enumerate(delta_z):
+    if abs(val) > threshold:
+        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+
+plt.title("Różnice między kolejnymi punktami (ΔZ)")
+plt.xlabel("Indeks")
+plt.ylabel("ΔZ")
+plt.grid(True)
+plt.legend()
+plt.tight_layout()
+plt.show()
+
+
+
+
