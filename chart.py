@@ -1,18 +1,15 @@
 import os
 import re
+
+import numpy as np
 import plotly.graph_objs as go
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
-from enum import Enum
+import axis
 
-# X - lewo(wartości ujemne), prawo(wartości dodatnie)
-# Y - dół(wartości ujemne), góra(wartości dodatnie)
-# Z - do przodu(wartości ujemne), do tyłu(wartości dodatnie)
-class Axis(Enum):
-    X = 0
-    Y = 1
-    Z = 2
+import algorithm
+
+
 
 margin_ratio = 0.1
 
@@ -68,10 +65,22 @@ print(f"\nWczytywanie danych z:\n- {fileName1}\n- {fileName2}")
 allValues = pd.read_csv(fileName1, header=None)
 checkpointsData = pd.read_csv(fileName2, header=None)
 
+mode = input("Czy chcesz poprawić pomiary wględem odstających punktów? (t/n)")
+
+if mode.lower() in ("tak", "t"):
+    allValues = algorithm.check_points(allValues, 0.1)
+else:
+    pochodne = algorithm.licz_pochodne(allValues)
+    nieciaglosci = algorithm.wykryj_nieciaglosci(pochodne, prog=1.0)
+    allValues = algorithm.korekta(nieciaglosci, allValues)
+    algorithm.rysuj(allValues, nieciaglosci)
+
+#TODO zób 2 możliwości żeby osie były wszędzie takie same względem największej, lub tak jak teraz jest
+
 # ====== USTAWIENIE ZAKRESÓW ======
-combined_x = pd.concat([allValues[Axis.X.value], checkpointsData[Axis.X.value]])
-combined_y = pd.concat([allValues[Axis.Y.value], checkpointsData[Axis.Y.value]])
-combined_z = pd.concat([allValues[Axis.Z.value], checkpointsData[Axis.Z.value]])
+combined_x = pd.concat([allValues[axis.Axis.X.value], checkpointsData[axis.Axis.X.value]])
+combined_y = pd.concat([allValues[axis.Axis.Y.value], checkpointsData[axis.Axis.Y.value]])
+combined_z = pd.concat([allValues[axis.Axis.Z.value], checkpointsData[axis.Axis.Z.value]])
 
 axis_x_min, axis_x_max = get_dynamic_range(combined_x)
 axis_y_min, axis_y_max = get_dynamic_range(combined_y)
@@ -86,24 +95,24 @@ axis_z_min, axis_z_max = get_dynamic_range(combined_z)
 allValues_texts = [
     f"X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
     for i, (x, y, z) in enumerate(zip(
-        allValues[Axis.X.value],
-        allValues[Axis.Y.value],
-        allValues[Axis.Z.value]
+        allValues[axis.Axis.X.value],
+        allValues[axis.Axis.Y.value],
+        allValues[axis.Axis.Z.value]
     ))
 ]
 
 checkpoints_texts = [
     f"Checkpoint {i+1}<br>X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
     for i, (x, y, z) in enumerate(zip(
-        checkpointsData[Axis.X.value],
-        checkpointsData[Axis.Y.value],
-        checkpointsData[Axis.Z.value]
+        checkpointsData[axis.Axis.X.value],
+        checkpointsData[axis.Axis.Y.value],
+        checkpointsData[axis.Axis.Z.value]
     ))
 ]
 
 
 trace = go.Scatter3d(
-    x=allValues[Axis.X.value], y=allValues[Axis.Z.value], z=allValues[Axis.Y.value],
+    x=allValues[axis.Axis.X.value], y=allValues[axis.Axis.Z.value], z=allValues[axis.Axis.Y.value],
     mode='markers',
     marker=dict(size=4, color='blue', opacity=0.8),
     name='Values',
@@ -112,7 +121,7 @@ trace = go.Scatter3d(
 )
 
 checkpoints = go.Scatter3d(
-    x=checkpointsData[Axis.X.value], y=checkpointsData[Axis.Z.value], z=checkpointsData[Axis.Y.value],
+    x=checkpointsData[axis.Axis.X.value], y=checkpointsData[axis.Axis.Z.value], z=checkpointsData[axis.Axis.Y.value],
     mode='markers',
     marker=dict(size=5, color='red', opacity=0.8),
     name='Checkpoints',
@@ -121,7 +130,7 @@ checkpoints = go.Scatter3d(
 )
 
 layout = go.Layout(
-    title='Map',
+    title=f'Map:{timestamp}',
     scene=dict(
         xaxis_title='X(prawo lewo)',
         yaxis_title='Z(przód tył)',
@@ -137,55 +146,54 @@ fig.show()
 
 # ====== WYKRESY 2D Matplotlib ======
 # XY
-plt.scatter(allValues[Axis.X.value], allValues[Axis.Y.value])
-plt.scatter(checkpointsData[Axis.X.value], checkpointsData[Axis.Y.value])
+plt.title(timestamp)
+plt.scatter(allValues[axis.Axis.X.value], allValues[axis.Axis.Y.value])
+plt.scatter(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Y.value])
 plt.xlabel("X(prawo lewo)")
 plt.ylabel("Y(dół góra)")
 plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_y_min, axis_y_max])
 
-for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Y.value])):
+for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Y.value])):
     plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
 plt.show()
 
 # XZ
-plt.scatter(allValues[Axis.X.value], allValues[Axis.Z.value])
-plt.scatter(checkpointsData[Axis.X.value], checkpointsData[Axis.Z.value])
+plt.title(timestamp)
+plt.scatter(allValues[axis.Axis.X.value], allValues[axis.Axis.Z.value])
+plt.scatter(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Z.value])
 plt.xlabel("X(prawo lewo)")
 plt.ylabel("Z(przód tył)")
 plt.xlim([axis_x_min, axis_x_max])
 plt.ylim([axis_z_min, axis_z_max])
 
-for i, (x, y) in enumerate(zip(checkpointsData[Axis.X.value], checkpointsData[Axis.Z.value])):
+for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Z.value])):
     plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
 plt.show()
 
 # ZY
-plt.scatter(allValues[Axis.Z.value], allValues[Axis.Y.value])
-plt.scatter(checkpointsData[Axis.Z.value], checkpointsData[Axis.Y.value])
+plt.title(timestamp)
+plt.scatter(allValues[axis.Axis.Z.value], allValues[axis.Axis.Y.value])
+plt.scatter(checkpointsData[axis.Axis.Z.value], checkpointsData[axis.Axis.Y.value])
 plt.xlabel("Z(przód tył)")
 plt.ylabel("Y(dół góra)")
 plt.xlim([axis_z_min, axis_z_max])
 plt.ylim([axis_y_min, axis_y_max])
 
-for i, (x, y) in enumerate(zip(checkpointsData[Axis.Z.value], checkpointsData[Axis.Y.value])):
+for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.Z.value], checkpointsData[axis.Axis.Y.value])):
     plt.text(x, y, f"{i+1}", fontsize=6, color='black')
 
 # ====== RÓŻNICE X, Y, Z (delta między kolejnymi punktami) ======
-
-import numpy as np
-import matplotlib.pyplot as plt
-
 # Zakładam, że masz dane allValues[Axis.X.value], itp.
 # Próg dla odstających punktów
-threshold = 0.5
+threshold = 0.1
 
 # Oblicz różnice
-delta_x = np.diff(allValues[Axis.X.value])
-delta_y = np.diff(allValues[Axis.Y.value])
-delta_z = np.diff(allValues[Axis.Z.value])
+delta_x = np.diff(allValues[axis.Axis.X.value])
+delta_y = np.diff(allValues[axis.Axis.Y.value])
+delta_z = np.diff(allValues[axis.Axis.Z.value])
 
 # Indeksy dla wykresów
 indexes = np.arange(len(delta_x))
@@ -198,9 +206,9 @@ plt.axhline(0, color='gray', linestyle='--')
 # Adnotacje dla punktów odstających
 for i, val in enumerate(delta_x):
     if abs(val) > threshold:
-        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+        plt.text(i, val, str(i+1) +"-"+ str(i+2), color='purple', fontsize=9, ha='center')
 
-plt.title("Różnice między kolejnymi punktami (ΔX)")
+plt.title(f"Różnice między kolejnymi punktami (ΔX) - {timestamp}")
 plt.xlabel("Indeks")
 plt.ylabel("ΔX")
 plt.grid(True)
@@ -217,9 +225,9 @@ plt.axhline(0, color='gray', linestyle='--')
 # Adnotacje dla punktów odstających
 for i, val in enumerate(delta_y):
     if abs(val) > threshold:
-        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+        plt.text(i, val, str(i+1) +"-"+ str(i+2), color='purple', fontsize=9, ha='center')
 
-plt.title("Różnice między kolejnymi punktami (ΔY)")
+plt.title(f"Różnice między kolejnymi punktami (ΔY) - {timestamp}")
 plt.xlabel("Indeks")
 plt.ylabel("ΔY")
 plt.grid(True)
@@ -235,9 +243,9 @@ plt.axhline(0, color='gray', linestyle='--')
 # Adnotacje dla punktów odstających
 for i, val in enumerate(delta_z):
     if abs(val) > threshold:
-        plt.text(i + 1, val, str(i), color='purple', fontsize=9, ha='center')
+        plt.text(i, val, str(i+1) +"-"+ str(i+2), color='purple', fontsize=9, ha='center')
 
-plt.title("Różnice między kolejnymi punktami (ΔZ)")
+plt.title(f"Różnice między kolejnymi punktami (ΔZ) - {timestamp}")
 plt.xlabel("Indeks")
 plt.ylabel("ΔZ")
 plt.grid(True)
