@@ -1,9 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import axis
+import plotly.graph_objs as go
 
 
-def shift_axis_after_index(data, index, shift_value, axis):
+def shift_axis_after_index(data, index, shift_value, axis_name):
     """
     Przesuwa wybraną oś (x, y lub z) o zadaną wartość od danego indeksu w dół.
 
@@ -11,38 +12,44 @@ def shift_axis_after_index(data, index, shift_value, axis):
     - data: DataFrame z kolumnami: x, y, z (czyli 0, 1, 2)
     - index: indeks wiersza, po którym dane mają być przesunięte (czyli od index+1)
     - shift_value: liczba, o którą przesunąć (np. -2)
-    - axis: 'x', 'y' lub 'z' (wskazuje kolumnę do modyfikacji)
+    - axis_name: 'x', 'y' lub 'z' (wskazuje kolumnę do modyfikacji)
 
     Zwraca:
     - Nowy DataFrame z naniesionym przesunięciem (oryginalny nie jest modyfikowany)
     """
     axis_map = {'x': 0, 'y': 1, 'z': 2}
-    if axis not in axis_map:
+    if axis_name not in axis_map:
         raise ValueError("Oś musi być jedną z: 'x', 'y', 'z'")
 
-    col = axis_map[axis]
+    col = axis_map[axis_name]
     data_copy = data.copy()
     data_copy.loc[index:, col] += shift_value
     return data_copy
 
 
-def check_points(data, diff):
-    for i in range(len(data) - 1):
-        x = np.diff(data[axis.Axis.X.value])
-        y = np.diff(data[axis.Axis.Y.value])
-        z = np.diff(data[axis.Axis.Z.value])
-
-        data = edge_points(data, diff, i, x, y, z)
+def edge_points(data, diff, i, dx, dy, dz):
+    """
+    Sprawdza pochodne w punkcie i i w razie przekroczenia progu koryguje kolejne punkty.
+    """
+    if abs(dx[i]) > diff:
+        data = shift_axis_after_index(data, i + 1, 0.05 - dx[i], 'x')
+    if abs(dy[i]) > diff:
+        data = shift_axis_after_index(data, i + 1, 0.05 - dy[i], 'y')
+    if abs(dz[i]) > diff:
+        data = shift_axis_after_index(data, i + 1, 0.05 - dz[i], 'z')
     return data
 
 
-def edge_points(data, diff, i, x, y, z):
-    if x[i] > diff or x[i] < -diff:
-        data = shift_axis_after_index(data, i + 1, 0.05 - x[i], 'x')
-    if y[i] > diff or y[i] < -diff:
-        data = shift_axis_after_index(data, i + 1, 0.05 - y[i], 'y')
-    if z[i] > diff or z[i] < -diff:
-        data = shift_axis_after_index(data, i + 1, 0.05 - z[i], 'z')
+def check_points(data, diff):
+    """
+    Iteracyjnie sprawdza wszystkie różnice między punktami i koryguje te,
+    które przekraczają dopuszczalny próg.
+    """
+    for i in range(len(data) - 1):
+        dx = np.diff(data[axis.Axis.X.value])
+        dy = np.diff(data[axis.Axis.Y.value])
+        dz = np.diff(data[axis.Axis.Z.value])
+        data = edge_points(data, diff, i, dx, dy, dz)
     return data
 
 
@@ -50,50 +57,100 @@ def licz_pochodne(df):
     """
     Zwraca pochodne (różnice pozycji) w postaci DataFrame.
     """
-    d = df.diff()  # różnice między kolejnymi wierszami
-    d.iloc[0] = 0  # pierwsza różnica nie istnieje (bo nie ma poprzedniego punktu)
+    d = df.diff()
+    d.iloc[0] = 0
     return d
 
 
 def wykryj_nieciaglosci(df_diff, prog=1.0):
     """
-    Wykrywa indeksy, gdzie długość pochodnej przekracza próg.
+    Wykrywa indeksy punktów, w których długość wektora pochodnej przekracza próg.
+
+    Zwraca:
+    - Listę indeksów, gdzie pochodna przekracza zadany próg.
     """
-    magnitude = np.sqrt(
-        df_diff[axis.Axis.X.value] ** 2 + df_diff[axis.Axis.Y.value] ** 2 + df_diff[axis.Axis.Z.value] ** 2)
-    nieciaglosci = magnitude[magnitude > prog].index.tolist()
-    return nieciaglosci
+    magnitude = calculate_magnitude(df_diff)
+    return np.where(magnitude > prog)[0].tolist()
 
 
-def rysuj(df, nieciaglosci):
-    """
-    Wykres 3D trajektorii z zaznaczeniem nieciągłości.
-    """
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    ax.plot(df[axis.Axis.X.value], df[axis.Axis.Y.value], df[axis.Axis.Z.value], label='Trajektoria')
-
-    for i in nieciaglosci:
-        ax.scatter(df.loc[i, axis.Axis.X.value], df.loc[i, axis.Axis.Y.value], df.loc[i, axis.Axis.Z.value],
-                   color='red', s=60, label='Nieciągłość' if i == nieciaglosci[0] else "")
-
-    ax.set_title('Ruch telefonu (z ARCore) + analiza pochodnych')
-    ax.set_xlabel('X')
-    ax.set_ylabel('Y')
-    ax.set_zlabel('Z')
-    ax.legend()
-    plt.show()
+def calculate_magnitude(df_diff):
+    magnitude = np.linalg.norm(df_diff[[axis.Axis.X.value, axis.Axis.Y.value, axis.Axis.Z.value]].values, axis=1)
+    return magnitude
 
 
 def korekta(nieciaglosci, df):
+    """
+    Koryguje dane usuwając nagłe skoki poprzez przesunięcie kolejnych punktów tak,
+    aby wyrównać trajektorię (ciągłość ścieżki).
+    """
     for i in nieciaglosci:
-        # obliczamy wektor skoku (pochodna w tym punkcie)
         dx = df.loc[i, axis.Axis.X.value] - df.loc[i - 1, axis.Axis.X.value]
         dy = df.loc[i, axis.Axis.Y.value] - df.loc[i - 1, axis.Axis.Y.value]
         dz = df.loc[i, axis.Axis.Z.value] - df.loc[i - 1, axis.Axis.Z.value]
 
-        # przesuwamy wszystkie kolejne punkty, żeby usunąć skok
         df.loc[i:, axis.Axis.X.value] -= dx
         df.loc[i:, axis.Axis.Y.value] -= dy
         df.loc[i:, axis.Axis.Z.value] -= dz
     return df
+
+
+def rysuj(df, nieciaglosci):
+    """
+    Tworzy interaktywny wykres 3D trajektorii z zaznaczeniem punktów nieciągłości.
+    """
+
+    trace_trajektoria = go.Scatter3d(
+        x=df[axis.Axis.X.value],
+        y=df[axis.Axis.Z.value],
+        z=df[axis.Axis.Y.value],
+        mode='lines+markers',
+        marker=dict(size=3, color='blue', opacity=0.8),
+        line=dict(color='blue'),
+        name='Trajektoria'
+    )
+
+    trace_nieciaglosci = go.Scatter3d(
+        x=df.loc[nieciaglosci, axis.Axis.X.value],
+        y=df.loc[nieciaglosci, axis.Axis.Z.value],
+        z=df.loc[nieciaglosci, axis.Axis.Y.value],
+        mode='markers',
+        marker=dict(size=6, color='red', opacity=1.0),
+        name='Nieciągłość'
+    )
+
+    fig = go.Figure(data=[trace_trajektoria, trace_nieciaglosci])
+    fig.update_layout(
+        title='Ruch telefonu (z ARCore) + analiza pochodnych',
+        scene=dict(
+            xaxis_title='X',
+            yaxis_title='Z',
+            zaxis_title='Y'
+        ),
+        legend=dict(x=0, y=1)
+    )
+    fig.show()
+
+
+# Funkcja pomocnicza do rysowania
+def rysuj_wykres_dX(df_diff, kolumna, kolor, label, threshold, timestamp):
+    plt.figure(figsize=(16, 6))
+    indexes = np.arange(len(df_diff))
+    if kolumna == 'none':
+        delta = df_diff
+    else:
+        delta = df_diff[kolumna].values
+    plt.plot(indexes, delta, color=kolor, label=label)
+    plt.axhline(0, color='gray', linestyle='--')
+
+    for i, val in enumerate(delta):
+        if abs(val) > threshold:
+            plt.text(i, val, f"{i}-{i + 1}", color='purple', fontsize=9, ha='center')
+
+    plt.title(f"Pochodne {label} - {timestamp}")
+    plt.xlabel("Indeks")
+    plt.ylabel(f"{label}")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.margins(x=0.05, y=0.1)
+    plt.show()

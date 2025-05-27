@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 # X - lewo(wartości ujemne), prawo(wartości dodatnie)
 # Y - dół(wartości ujemne), góra(wartości dodatnie)
 # Z - do przodu(wartości ujemne), do tyłu(wartości dodatnie)
