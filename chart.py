@@ -64,20 +64,30 @@ print(f"\nWczytywanie danych z:\n- {fileName1}\n- {fileName2}")
 allValues = pd.read_csv(fileName1, header=None)
 checkpointsData = pd.read_csv(fileName2, header=None)
 
+# === DANE OD UŻYTKOWNIKA ===
+invert_z = input("Czy chcesz zamienić zwrot osi Z (przód ↔ tył) dla lepszej orientacji wykresu? (t/n) ")
 repair = input("Czy chcesz poprawić pomiary względem odstających punktów? (t/n) ")
+axis_size = input("Czy skala ma być taka sama dla wszystkich osi? (t/n) ")
+
+if invert_z.lower() in ("tak", "t"):
+    # === ODWRÓĆ OŚ Z ===
+    allValues[axis.Axis.Z.value] *= -1
+    checkpointsData[axis.Axis.Z.value] *= -1
+
 
 if repair.lower() in ("tak", "t"):
+    # === KOREKTA DANYCH ===
     # Popraw dane główne
-    pochodne_all = algorithm.licz_pochodne(allValues)
-    nieciaglosci_all = algorithm.wykryj_nieciaglosci(pochodne_all, prog=0.1)
-    allValues = algorithm.korekta(nieciaglosci_all, allValues)
-    algorithm.rysuj(allValues, nieciaglosci_all)
+    deltas_all = algorithm.compute_position_deltas(allValues)
+    discontinuities_all = algorithm.detect_position_discontinuities(deltas_all, threshold=0.1)
+    allValues = algorithm.correct_discontinuities(discontinuities_all, allValues)
+    algorithm.plot_trajectory_with_discontinuities(allValues, discontinuities_all)
 
     # # Popraw checkpointy
-    # pochodne_cp = algorithm.licz_pochodne(checkpointsData)
-    # nieciaglosci_cp = algorithm.wykryj_nieciaglosci(pochodne_cp, prog=3.0)
-    # checkpointsData = algorithm.korekta(nieciaglosci_cp, checkpointsData)
-    # algorithm.rysuj(checkpointsData, nieciaglosci_cp)
+    # deltas_cp = algorithm.compute_position_deltas(checkpointsData)
+    # discontinuities_cp = algorithm.detect_position_discontinuities(deltas_cp, threshold=0.1)
+    # checkpointsData = algorithm.correct_discontinuities(discontinuities_cp, checkpointsData)
+    # algorithm.plot_trajectory_with_discontinuities(checkpointsData, discontinuities_cp)
 
 # ====== USTAWIENIE ZAKRESÓW ======
 combined_x = pd.concat([allValues[axis.Axis.X.value], checkpointsData[axis.Axis.X.value]])
@@ -88,8 +98,8 @@ axis_x_min, axis_x_max = get_dynamic_range(combined_x)
 axis_y_min, axis_y_max = get_dynamic_range(combined_y)
 axis_z_min, axis_z_max = get_dynamic_range(combined_z)
 
-axis_size = input("Czy skala ma być taka sama dla wszystkich osi? (t/n) ")
 if axis_size.lower() in ("tak", "t"):
+    # === ZAKRES OSI ===
     common_min = min(axis_x_min, axis_y_min, axis_z_min)
     common_max = max(axis_x_max, axis_y_max, axis_z_max)
 
@@ -99,11 +109,8 @@ if axis_size.lower() in ("tak", "t"):
 # ====== WYKRES 3D Plotly ======
 # Z is switched with Y to better clarity
 
-# allValues_texts = [f"Punkt {i}" for i in range(len(allValues))]
-# checkpoints_texts = [f"Checkpoint {i}" for i in range(len(checkpointsData))]
-
 allValues_texts = [
-    f"X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
+    f"Value {i + 1}X: {x:.2f}<br>Y: {y:.2f}<br>Z: {z:.2f}"
     for i, (x, y, z) in enumerate(zip(
         allValues[axis.Axis.X.value],
         allValues[axis.Axis.Y.value],
@@ -157,57 +164,34 @@ if repair.lower() not in ("tak", "t"):
     fig = go.Figure(data=[trace, checkpoints], layout=layout)
 else:
     fig = go.Figure(data=[trace], layout=layout)
-    fig.show()
+
+fig.show()
+
+
 
 # ====== WYKRESY 2D Matplotlib ======
-# XY
-plt.title(timestamp)
-plt.scatter(allValues[axis.Axis.X.value], allValues[axis.Axis.Y.value])
-if repair.lower() not in ("tak", "t"):
-    plt.scatter(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Y.value])
-    for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Y.value])):
-        plt.text(x, y, f"{i + 1}", fontsize=6, color='black')
-plt.xlabel("X(prawo lewo)")
-plt.ylabel("Y(dół góra)")
-plt.xlim([axis_x_min, axis_x_max])
-plt.ylim([axis_y_min, axis_y_max])
 
-plt.show()
+algorithm.plot_2d_projections_with_checkpoints(
+    all_values=allValues,
+    checkpoints_data=checkpointsData,
+    axis_limits={
+        axis.Axis.X.value: (axis_x_min, axis_x_max),
+        axis.Axis.Y.value: (axis_y_min, axis_y_max),
+        axis.Axis.Z.value: (axis_z_min, axis_z_max),
+    },
+    timestamp=timestamp,
+    repair=repair
+)
 
-# XZ
-plt.title(timestamp)
-plt.scatter(allValues[axis.Axis.X.value], allValues[axis.Axis.Z.value])
-if repair.lower() not in ("tak", "t"):
-    plt.scatter(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Z.value])
-    for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.X.value], checkpointsData[axis.Axis.Z.value])):
-        plt.text(x, y, f"{i + 1}", fontsize=6, color='black')
-plt.xlabel("X(prawo lewo)")
-plt.ylabel("Z(przód tył)")
-plt.xlim([axis_x_min, axis_x_max])
-plt.ylim([axis_z_min, axis_z_max])
-
-plt.show()
-
-# ZY
-plt.title(timestamp)
-plt.scatter(allValues[axis.Axis.Z.value], allValues[axis.Axis.Y.value])
-if repair.lower() not in ("tak", "t"):
-    plt.scatter(checkpointsData[axis.Axis.Z.value], checkpointsData[axis.Axis.Y.value])
-    for i, (x, y) in enumerate(zip(checkpointsData[axis.Axis.Z.value], checkpointsData[axis.Axis.Y.value])):
-        plt.text(x, y, f"{i + 1}", fontsize=6, color='black')
-plt.xlabel("Z(przód tył)")
-plt.ylabel("Y(dół góra)")
-plt.xlim([axis_z_min, axis_z_max])
-plt.ylim([axis_y_min, axis_y_max])
 
 # Oblicz różnice (pochodne)
-pochodne = algorithm.licz_pochodne(allValues)
+pochodne = algorithm.compute_position_deltas(allValues)
 
 # Próg dla oznaczenia odstających punktów
 threshold = 0.1
 
 # Rysowanie wykresów
-algorithm.rysuj_wykres_dX(pochodne, axis.Axis.X.value, 'blue', 'ΔX', threshold, timestamp)
-algorithm.rysuj_wykres_dX(pochodne, axis.Axis.Y.value, 'green', 'ΔY', threshold, timestamp)
-algorithm.rysuj_wykres_dX(pochodne, axis.Axis.Z.value, 'orange', 'ΔZ', threshold, timestamp)
-algorithm.rysuj_wykres_dX(algorithm.calculate_magnitude(pochodne), 'none', 'red', '|ΔV|', threshold, timestamp)
+algorithm.plot_derivative_changes(pochodne, axis.Axis.X.value, 'blue', 'ΔX', threshold, timestamp)
+algorithm.plot_derivative_changes(pochodne, axis.Axis.Y.value, 'green', 'ΔY', threshold, timestamp)
+algorithm.plot_derivative_changes(pochodne, axis.Axis.Z.value, 'orange', 'ΔZ', threshold, timestamp)
+algorithm.plot_derivative_changes(algorithm.compute_derivative_magnitude(pochodne), 'none', 'red', '|ΔV|', threshold, timestamp)
