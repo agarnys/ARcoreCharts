@@ -87,6 +87,7 @@ def plot_2d_projections_with_checkpoints(all_values, checkpoints_data, axis_limi
     - timestamp: etykieta czasu do tytułów wykresów.
     - repair: str, jeżeli "tak" lub "t" (niezależnie od wielkości liter), punkty kontrolne nie będą rysowane.
     """
+
     def _plot_projection(x_axis, y_axis, x_label, y_label):
         plt.title(timestamp)
         plt.scatter(all_values[x_axis], all_values[y_axis], label='Trajektoria', s=10)
@@ -110,7 +111,7 @@ def plot_2d_projections_with_checkpoints(all_values, checkpoints_data, axis_limi
     _plot_projection(axis.Axis.Z.value, axis.Axis.Y.value, "Z(przód tył)", "Y(dół góra)")
 
 
-def plot_trajectory_with_discontinuities(df, discontinuity_indices):
+def plot_trajectory_with_discontinuities(df, discontinuity_indices, timestamp):
     """
     Tworzy interaktywny wykres 3D trajektorii, zaznaczając punkty, w których wykryto nieciągłości.
 
@@ -139,7 +140,7 @@ def plot_trajectory_with_discontinuities(df, discontinuity_indices):
 
     fig = go.Figure(data=[trace_trajectory, trace_discontinuities])
     fig.update_layout(
-        title='Ruch telefonu (z ARCore) + analiza pochodnych',
+        title=f'Ruch telefonu (z ARCore) + analiza pochodnych: {timestamp}',
         scene=dict(
             xaxis_title='X',
             yaxis_title='Z',

@@ -1,7 +1,6 @@
 import os
 import re
 
-import matplotlib.pyplot as plt
 import pandas as pd
 import plotly.graph_objs as go
 
@@ -21,8 +20,8 @@ def get_dynamic_range(data):
 
 # === ŚCIEŻKI ===
 base_folder = "files"
-data_prefix = "dane"
-checkpoints_prefix = "checkpoint"
+data_prefix = "data"
+checkpoints_prefix = "checkpoints"
 data_suffix = ".csv"
 
 # === WZORZEC: dowolna nazwa kończąca się na datę ===
@@ -74,14 +73,13 @@ if invert_z.lower() in ("tak", "t"):
     allValues[axis.Axis.Z.value] *= -1
     checkpointsData[axis.Axis.Z.value] *= -1
 
-
 if repair.lower() in ("tak", "t"):
     # === KOREKTA DANYCH ===
     # Popraw dane główne
     deltas_all = algorithm.compute_position_deltas(allValues)
     discontinuities_all = algorithm.detect_position_discontinuities(deltas_all, threshold=0.1)
     allValues = algorithm.correct_discontinuities(discontinuities_all, allValues)
-    algorithm.plot_trajectory_with_discontinuities(allValues, discontinuities_all)
+    algorithm.plot_trajectory_with_discontinuities(allValues, discontinuities_all, timestamp)
 
     # # Popraw checkpointy
     # deltas_cp = algorithm.compute_position_deltas(checkpointsData)
@@ -167,8 +165,6 @@ else:
 
 fig.show()
 
-
-
 # ====== WYKRESY 2D Matplotlib ======
 
 algorithm.plot_2d_projections_with_checkpoints(
@@ -183,7 +179,6 @@ algorithm.plot_2d_projections_with_checkpoints(
     repair=repair
 )
 
-
 # Oblicz różnice (pochodne)
 pochodne = algorithm.compute_position_deltas(allValues)
 
@@ -194,4 +189,5 @@ threshold = 0.1
 algorithm.plot_derivative_changes(pochodne, axis.Axis.X.value, 'blue', 'ΔX', threshold, timestamp)
 algorithm.plot_derivative_changes(pochodne, axis.Axis.Y.value, 'green', 'ΔY', threshold, timestamp)
 algorithm.plot_derivative_changes(pochodne, axis.Axis.Z.value, 'orange', 'ΔZ', threshold, timestamp)
-algorithm.plot_derivative_changes(algorithm.compute_derivative_magnitude(pochodne), 'none', 'red', '|ΔV|', threshold, timestamp)
+algorithm.plot_derivative_changes(algorithm.compute_derivative_magnitude(pochodne), 'none', 'red', '|ΔV|', threshold,
+                                  timestamp)
